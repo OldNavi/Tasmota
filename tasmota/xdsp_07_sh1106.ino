@@ -1,7 +1,7 @@
 /*
   xdsp_07_SH1106.ino - Display Oled SH1106 support for Tasmota
 
-  Copyright (C) 2019  Theo Arends and Adafruit
+  Copyright (C) 2020  Theo Arends and Adafruit
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -28,6 +28,7 @@
 extern uint8_t *buffer;
 
 #define XDSP_07                7
+#define XI2C_06                6            // See I2CDEVICES.md
 
 #define OLED_ADDRESS1          0x3C         // Oled 128x32 I2C address
 #define OLED_ADDRESS2          0x3D         // Oled 128x64 I2C address
@@ -50,17 +51,18 @@ Adafruit_SH1106 *oled1106;
 void SH1106InitDriver()
 {
   if (!Settings.display_model) {
-    if (I2cDevice(OLED_ADDRESS1)) {
+    if (I2cSetDevice(OLED_ADDRESS1)) {
       Settings.display_address[0] = OLED_ADDRESS1;
       Settings.display_model = XDSP_07;
     }
-    else if (I2cDevice(OLED_ADDRESS2)) {
+    else if (I2cSetDevice(OLED_ADDRESS2)) {
       Settings.display_address[0] = OLED_ADDRESS2;
       Settings.display_model = XDSP_07;
     }
   }
 
   if (XDSP_07 == Settings.display_model) {
+    I2cSetActiveFound(Settings.display_address[0], "SH1106");
 
     if (Settings.display_width != SH1106_LCDWIDTH) {
       Settings.display_width = SH1106_LCDWIDTH;
@@ -117,8 +119,7 @@ void SH1106PrintLog(void)
       strlcpy(disp_screen_buffer[last_row], txt, disp_screen_buffer_cols);
       DisplayFillScreen(last_row);
 
-      snprintf_P(log_data, sizeof(log_data), PSTR(D_LOG_DEBUG "[%s]"), disp_screen_buffer[last_row]);
-      AddLog(LOG_LEVEL_DEBUG);
+      AddLog_P2(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "[%s]"), disp_screen_buffer[last_row]);
 
       renderer->println(disp_screen_buffer[last_row]);
       renderer->Updateframe();
@@ -167,24 +168,24 @@ void SH1106Refresh(void)  // Every second
 
 bool Xdsp07(uint8_t function)
 {
+  if (!I2cEnabled(XI2C_06)) { return false; }
+
   bool result = false;
 
-  if (i2c_flg) {
-    if (FUNC_DISPLAY_INIT_DRIVER == function) {
-      SH1106InitDriver();
-    }
-    else if (XDSP_07 == Settings.display_model) {
+  if (FUNC_DISPLAY_INIT_DRIVER == function) {
+    SH1106InitDriver();
+  }
+  else if (XDSP_07 == Settings.display_model) {
 
-      switch (function) {
-        case FUNC_DISPLAY_MODEL:
-          result = true;
-          break;
+    switch (function) {
+      case FUNC_DISPLAY_MODEL:
+        result = true;
+        break;
 #ifdef USE_DISPLAY_MODES1TO5
-        case FUNC_DISPLAY_EVERY_SECOND:
-          SH1106Refresh();
-          break;
+      case FUNC_DISPLAY_EVERY_SECOND:
+        SH1106Refresh();
+        break;
 #endif  // USE_DISPLAY_MODES1TO5
-      }
     }
   }
   return result;

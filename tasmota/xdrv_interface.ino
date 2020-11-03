@@ -1,7 +1,7 @@
 /*
   xdrv_interface.ino - Driver interface support for Tasmota
 
-  Copyright (C) 2019  Theo Arends inspired by ESPEasy
+  Copyright (C) 2020  Theo Arends inspired by ESPEasy
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -888,6 +888,8 @@ bool XdrvCallDriver(uint32_t driver, uint8_t Function)
 bool XdrvCall(uint8_t Function)
 {
   bool result = false;
+
+  DEBUG_TRACE_LOG(PSTR("DRV: %d"), Function);
 
   for (uint32_t x = 0; x < xdrv_present; x++) {
     result = xdrv_func_ptr[x](Function);

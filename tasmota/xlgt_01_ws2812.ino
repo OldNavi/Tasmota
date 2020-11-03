@@ -1,7 +1,7 @@
 /*
   xlgt_01_ws2812.ino - led string support for Tasmota
 
-  Copyright (C) 2019  Theo Arends
+  Copyright (C) 2020  Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -63,7 +63,21 @@ void (* const Ws2812Command[])(void) PROGMEM = {
 
 #ifdef USE_WS2812_DMA
 
+#ifdef USE_WS2812_INVERTED
 // See NeoEspDmaMethod.h for available options
+
+#if (USE_WS2812_HARDWARE == NEO_HW_WS2812X)
+  typedef NeoEsp8266DmaInvertedWs2812xMethod selectedNeoSpeedType;
+#elif (USE_WS2812_HARDWARE == NEO_HW_SK6812)
+  typedef NeoEsp8266DmaInvertedSk6812Method selectedNeoSpeedType;
+#elif (USE_WS2812_HARDWARE == NEO_HW_APA106)
+  typedef NeoEsp8266DmaInvertedApa106Method selectedNeoSpeedType;
+#else   // USE_WS2812_HARDWARE
+  typedef NeoEsp8266DmaInverted800KbpsMethod selectedNeoSpeedType;
+#endif  // USE_WS2812_HARDWARE
+
+#else  // No USE_WS2812_INVERTED
+
 #if (USE_WS2812_HARDWARE == NEO_HW_WS2812X)
   typedef NeoEsp8266DmaWs2812xMethod selectedNeoSpeedType;
 #elif (USE_WS2812_HARDWARE == NEO_HW_SK6812)
@@ -74,9 +88,23 @@ void (* const Ws2812Command[])(void) PROGMEM = {
   typedef NeoEsp8266Dma800KbpsMethod selectedNeoSpeedType;
 #endif  // USE_WS2812_HARDWARE
 
-#else   // USE_WS2812_DMA
+#endif  // No USE_WS2812_INVERTED
 
+#else   // No USE_WS2812_DMA
+
+#ifdef USE_WS2812_INVERTED
 // See NeoEspBitBangMethod.h for available options
+
+#if (USE_WS2812_HARDWARE == NEO_HW_WS2812X)
+  typedef NeoEsp8266BitBangWs2812xInvertedMethod selectedNeoSpeedType;
+#elif (USE_WS2812_HARDWARE == NEO_HW_SK6812)
+  typedef NeoEsp8266BitBangSk6812InvertedMethod selectedNeoSpeedType;
+#else   // USE_WS2812_HARDWARE
+  typedef NeoEsp8266BitBang400KbpsInvertedMethod selectedNeoSpeedType;
+#endif  // USE_WS2812_HARDWARE
+
+#else  // No USE_WS2812_INVERTED
+
 #if (USE_WS2812_HARDWARE == NEO_HW_WS2812X)
   typedef NeoEsp8266BitBangWs2812xMethod selectedNeoSpeedType;
 #elif (USE_WS2812_HARDWARE == NEO_HW_SK6812)
@@ -85,7 +113,9 @@ void (* const Ws2812Command[])(void) PROGMEM = {
   typedef NeoEsp8266BitBang800KbpsMethod selectedNeoSpeedType;
 #endif  // USE_WS2812_HARDWARE
 
-#endif  // USE_WS2812_DMA
+#endif  // No USE_WS2812_INVERTED
+
+#endif  // No USE_WS2812_DMA
 
 NeoPixelBus<selectedNeoFeatureType, selectedNeoSpeedType> *strip = nullptr;
 
@@ -191,7 +221,9 @@ void Ws2812UpdateHand(int position, uint32_t index)
 
   position = (position + Settings.light_rotation) % Settings.light_pixels;
 
-  if (Settings.flag.ws_clock_reverse) position = Settings.light_pixels -position;
+  if (Settings.flag.ws_clock_reverse) {  // SetOption16 - Switch between clockwise or counter-clockwise
+    position = Settings.light_pixels -position;
+  }
   WsColor hand_color = { Settings.ws_color[index][WS_RED], Settings.ws_color[index][WS_GREEN], Settings.ws_color[index][WS_BLUE] };
 
   Ws2812UpdatePixelColor(position, hand_color, 1);
@@ -387,7 +419,7 @@ char* Ws2812GetColor(uint32_t led, char* scolor)
   sl_ledcolor[2] = lcolor.B;
   scolor[0] = '\0';
   for (uint32_t i = 0; i < Light.subtype; i++) {
-    if (Settings.flag.decimal_text) {
+    if (Settings.flag.decimal_text) {  // SetOption17 - Switch between decimal or hexadecimal output (0 = hexadecimal, 1 = decimal)
       snprintf_P(scolor, 25, PSTR("%s%s%d"), scolor, (i > 0) ? "," : "", sl_ledcolor[i]);
     } else {
       snprintf_P(scolor, 25, PSTR("%s%02X"), scolor, sl_ledcolor[i]);
@@ -429,7 +461,7 @@ void Ws2812ShowScheme(void)
 
   switch (scheme) {
     case 0:  // Clock
-      if ((1 == state_250mS) || (Ws2812.show_next)) {
+      if ((1 == TasmotaGlobal.state_250mS) || (Ws2812.show_next)) {
         Ws2812Clock();
         Ws2812.show_next = 0;
       }
@@ -447,10 +479,10 @@ void Ws2812ShowScheme(void)
 
 void Ws2812ModuleSelected(void)
 {
-  if (pin[GPIO_WS2812] < 99) {  // RGB led
+  if (PinUsed(GPIO_WS2812)) {  // RGB led
 
     // For DMA, the Pin is ignored as it uses GPIO3 due to DMA hardware use.
-    strip = new NeoPixelBus<selectedNeoFeatureType, selectedNeoSpeedType>(WS2812_MAX_LEDS, pin[GPIO_WS2812]);
+    strip = new NeoPixelBus<selectedNeoFeatureType, selectedNeoSpeedType>(WS2812_MAX_LEDS, Pin(GPIO_WS2812));
     strip->Begin();
 
     Ws2812Clear();
@@ -459,11 +491,11 @@ void Ws2812ModuleSelected(void)
     Light.max_scheme += WS2812_SCHEMES;
 
 #if (USE_WS2812_CTYPE > NEO_3LED)
-    light_type = LT_RGBW;
+    TasmotaGlobal.light_type = LT_RGBW;
 #else
-    light_type = LT_RGB;
+    TasmotaGlobal.light_type = LT_RGB;
 #endif
-    light_flg = XLGT_01;
+    TasmotaGlobal.light_driver = XLGT_01;
   }
 }
 

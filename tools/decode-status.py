@@ -3,7 +3,7 @@
 """
   decode-status.py - decode status for Tasmota
 
-  Copyright (C) 2019 Theo Arends
+  Copyright (C) 2020  Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -20,7 +20,7 @@
 
 Requirements:
    - Python
-   - pip json pycurl
+   - pip json requests
 
 Instructions:
     Execute command with option -d to retrieve status report from device or
@@ -42,11 +42,10 @@ Example:
 import io
 import os.path
 import json
-import pycurl
-import urllib2
+import requests
+import urllib
 from sys import exit
 from optparse import OptionParser
-from StringIO import StringIO
 
 a_on_off = ["OFF","ON "]
 
@@ -86,21 +85,21 @@ a_setoption = [[
     ],[
     "Key hold time (ms)",
     "Sonoff POW Max_Power_Retry",
-    "(not used) Tuya MCU device id",
+    "Backlog delay (ms)",
     "(not used) mDNS delayed start (Sec)",
     "Boot loop retry offset (0 = disable)",
     "RGBWW remap",
     "IR Unknown threshold",
     "CSE7766 invalid power margin",
     "Ignore hold time (s)",
-    "(not used) Number of Tuya MCU relays",
+    "Gratuitous ARP repeat time",
     "Over temperature threshold (celsius)",
     "(not used) Tuya MCU max dimmer value",
     "(not used) Tuya MCU voltage Id",
     "(not used) Tuya MCU current Id",
     "(not used) Tuya MCU power Id",
-    "Energy Tariff1 start hour",
-    "Energy Tariff2 start hour",
+    "(not used) Energy Tariff1 start hour",
+    "(not used) Energy Tariff2 start hour",
     "",
     ],[
     "Timers enabled",
@@ -119,17 +118,65 @@ a_setoption = [[
     "Do not scan relay power state at restart",
     "Use _ instead of - as sensor index separator",
     "Disable fast power cycle detection for device reset",
-    "(not used) Disable Dimmer range 255 slider control",
+    "Enable TuyaMcuReceived messages over Mqtt",
     "Enable buzzer when available",
     "Enable multi-channels PWM instead of Color PWM",
     "(not used) Limits Tuya MCU dimmers to minimum of 10% (25) when enabled",
     "Enable Weekend Energy Tariff",
     "Select different Modbus registers for Active Energy",
-    "","",
-    "","","","",
-    "","",
+    "Enable hardware energy total counter as reference",
+    "Detach buttons from relays and enable MQTT action state for multipress",
+    "Enable internal pullup for single DS18x20 sensor",
+    "GroupTopic replaces %topic% (0) or fixed topic cmnd/grouptopic (1)",
+    "Enable incrementing bootcount when deepsleep is enabled",
+    "Do not power off if slider moved to far left",
+    "Bypass Compatibility check",
+    "Enable resetting of counters after telemetry was sent",
     "Enable shutter support",
     "Invert PCF8574 ports"
+    ],[
+    "Reduced CT range for Alexa",
+    "Use FriendlyNames instead of ShortAddresses when possible",
+    "(AWS IoT) publish MQTT state to a device shadow",
+    "Enable Device Groups",
+    "PWM Dimmer Turn brightness LED's off 5 seconds after last change",
+    "PWM Dimmer Turn red LED on when powered off",
+    "PWM Dimmer Buttons control remote devices",
+    "Distinct MQTT topics per device for Zigbee",
+    "Disable non-json MQTT response",
+    "Enable light fading at start/power on",
+    "Set PWM Mode from regular PWM to ColorTemp control",
+    "Keep uncompressed rules in memory to avoid CPU load of uncompressing at each tick",
+    "Implement simpler MAX6675 protocol instead of MAX31855",
+    "Enable Wifi",
+    "Enable Ethernet (ESP32)",
+    "Set Baud rate for TuyaMCU serial communication (0 = 9600 or 1 = 115200)",
+    "Rotary encoder uses rules instead of light control",
+    "Enable zerocross dimmer on PWM DIMMER",
+    "Remove ZbReceived form JSON message",
+    "Add the source endpoint as suffix to attributes",
+    "Baud rate for Teleinfo communication (0 = 1200 or 1 = 9600)",
+    "TLS mode",
+    "Disable all MQTT retained messages",
+    "Enable White blend mode",
+    "Create a virtual White ColorTemp for RGBW lights",
+    "Select virtual White as (0) Warm or (1) Cold",
+    "Enable Teleinfo telemetry into Tasmota Energy MQTT (0) or Teleinfo only (1)",
+    "Force gen1 Alexa mode",
+    "Disable Zigbee auto-config when pairing new devices",
+    "Use frequency output for buzzer pin instead of on/off signal",
+    "Use friendly name in zigbee topic (use with SetOption89)",
+    "Set dimmer low on rotary dial after power off"
+    ],[
+    "Detach Swiches from Relays and enable MQTT action state for all the SwitchModes",
+    "","","",
+    "","","","",
+    "","","","",
+    "","","","",
+    "","","","",
+    "","","","",
+    "","","","",
+    "","","",""
     ]]
 
 a_features = [[
@@ -173,7 +220,25 @@ a_features = [[
     "USE_INA226","USE_A4988_STEPPER","USE_DDS2382","USE_SM2135",
     "USE_SHUTTER","USE_PCF8574","USE_DDSU666","USE_DEEPSLEEP",
     "USE_SONOFF_SC","USE_SONOFF_RF","USE_SONOFF_L1","USE_EXS_DIMMER",
-    "USE_ARDUINO_SLAVE","","","",
+    "USE_TASMOTA_SLAVE","USE_HIH6","USE_HPMA","USE_TSL2591",
+    "USE_DHT12","USE_DS1624","USE_GPS","USE_HOTPLUG",
+    "USE_NRF24","USE_MIBLE","USE_HM10","USE_LE01MR",
+    "USE_AHT1x","USE_WEMOS_MOTOR_V1","USE_DEVICE_GROUPS","USE_PWM_DIMMER"
+    ],[
+    "USE_KEELOQ","USE_HRXL","USE_SONOFF_D1","USE_HDC1080",
+    "USE_IAQ","USE_DISPLAY_SEVENSEG","USE_AS3935","USE_PING",
+    "USE_WINDMETER","USE_OPENTHERM","USE_THERMOSTAT","USE_VEML6075",
+    "USE_VEML7700","USE_MCP9808","USE_BL0940","USE_TELEGRAM",
+    "USE_HP303B","USE_TCP_BRIDGE","USE_TELEINFO","USE_LMT01",
+    "USE_PROMETHEUS","USE_IEM3000","USE_DYP","USE_I2S_AUDIO",
+    "USE_MLX90640","USE_VL53L1X","USE_MIEL_HVAC","USE_WE517",
+    "USE_EZOPH","USE_TTGO_WATCH","USE_ETHERNET","USE_WEBCAM"
+    ],[
+    "USE_EZOORP","USE_EZORTD","USE_EZOHUM","USE_EZOEC",
+    "USE_EZOCO2","USE_EZOO2","USE_EZOPRS","USE_EZOFLO",
+    "USE_EZODO","USE_EZORGB","","",
+    "","","","",
+    "","","","",
     "","","","",
     "","","","",
     "","","",""
@@ -192,25 +257,19 @@ parser.add_option("-f", "--file", metavar="FILE",
 (options, args) = parser.parse_args()
 
 if (options.device):
-    buffer = StringIO()
     loginstr = ""
     if options.password is not None:
-        loginstr = "user={}&password={}&".format(urllib2.quote(options.username), urllib2.quote(options.password))
+        loginstr = "user={}&password={}&".format(urllib.parse.quote(options.username), urllib.parse.quote(options.password))
     url = str("http://{}/cm?{}cmnd=status%200".format(options.device, loginstr))
-    c = pycurl.Curl()
-    c.setopt(c.URL, url)
-    c.setopt(c.WRITEDATA, buffer)
-    c.perform()
-    c.close()
-    body = buffer.getvalue()
-    obj = json.loads(body)
+    res = requests.get(url)
+    obj = json.loads(res.content)
 else:
     jsonfile = options.jsonfile
     with open(jsonfile, "r") as fp:
         obj = json.load(fp)
 
 def StartDecode():
-    print ("\n*** decode-status.py v20190819 by Theo Arends and Jacek Ziolkowski ***")
+    print ("\n*** decode-status.py v20201102 by Theo Arends and Jacek Ziolkowski ***")
 
 #    print("Decoding\n{}".format(obj))
 
@@ -239,13 +298,14 @@ def StartDecode():
                         continue
 
                     elif len(register) == 36:         # 6.1.1.14: array consists of SetOptions 0..31, SetOptions 32..49, and SetOptions 50..81
+                                                      # 8.4.0.2: adds another SetOptions 114..145
                         split_register = [int(register[opt*2:opt*2+2],16) for opt in range(18)] # split register into 18 values
 
                         for opt_idx, option in enumerate(opt_group):
                             options.append(str("{0:2d} ({1:3d}) {2}".format(i, split_register[opt_idx], option)))
                             i += 1
 
-                if r in (0, 2): #registers 1 and 3 hold binary values
+                if r in (0, 2, 3, 4):                 #registers 1 and 4 hold binary values
                     for opt_idx, option in enumerate(opt_group):
                         i_register = int(register,16)
                         state = (i_register >> opt_idx) & 1
@@ -259,7 +319,7 @@ def StartDecode():
     if "StatusMEM" in obj:
         if "Features" in obj["StatusMEM"]:
             features = []
-            for f in range(6):
+            for f in range(7):
                 feature = obj["StatusMEM"]["Features"][f]
                 i_feature = int(feature,16)
                 if f == 0:

@@ -1,7 +1,7 @@
 /*
   xdrv_18_armtronix_dimmers.ino - Armtronix dimmers support for Tasmota
 
-  Copyright (C) 2019  wvdv2002 and Theo Arends
+  Copyright (C) 2020  wvdv2002 and Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -86,8 +86,8 @@ void ArmtronixRequestState(void)
 
 bool ArmtronixModuleSelected(void)
 {
-  devices_present++;
-  light_type = LT_SERIAL2;
+  TasmotaGlobal.devices_present++;
+  TasmotaGlobal.light_type = LT_SERIAL2;
   return true;
 }
 
@@ -97,7 +97,7 @@ void ArmtronixInit(void)
   Armtronix.dim_state[1] = -1;
   Armtronix.knob_state[0] = -1;
   Armtronix.knob_state[1] = -1;
-  ArmtronixSerial = new TasmotaSerial(pin[GPIO_RXD], pin[GPIO_TXD], 2);
+  ArmtronixSerial = new TasmotaSerial(Pin(GPIO_RXD), Pin(GPIO_TXD), 2);
   if (ArmtronixSerial->begin(115200)) {
     if (ArmtronixSerial->hardwareSerial()) { ClaimSerial(); }
     ArmtronixSerial->println("Status");
@@ -168,7 +168,7 @@ bool Xdrv18(uint8_t function)
 {
   bool result = false;
 
-  if (ARMTRONIX_DIMMERS == my_module_type) {
+  if (ARMTRONIX_DIMMERS == TasmotaGlobal.module_type) {
     switch (function) {
       case FUNC_LOOP:
         if (ArmtronixSerial) { ArmtronixSerialInput(); }
@@ -182,7 +182,7 @@ bool Xdrv18(uint8_t function)
       case FUNC_EVERY_SECOND:
         if (ArmtronixSerial) {
           if (Armtronix.wifi_state!=WifiState()) { ArmtronixSetWifiLed(); }
-          if (uptime &1) {
+          if (TasmotaGlobal.uptime &1) {
             ArmtronixSerial->println("Status");
           }
         }

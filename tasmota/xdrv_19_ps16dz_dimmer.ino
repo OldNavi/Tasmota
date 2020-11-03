@@ -1,7 +1,7 @@
 /*
   xdrv_19_ps16dz.dimmer.ino - PS_16_DZ dimmer support for Tasmota
 
-  Copyright (C) 2019  Joel Stein and Theo Arends
+  Copyright (C) 2020  Joel Stein and Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -69,7 +69,7 @@ void PS16DZSerialSendUpdateCommand(void)
 
   char tx_buffer[80];
   snprintf_P(tx_buffer, sizeof(tx_buffer), PSTR("AT+UPDATE=\"sequence\":\"%d%03d\",\"switch\":\"%s\",\"bright\":%d"),
-    LocalTime(), millis()%1000, power?"on":"off", light_state_dimmer);
+    LocalTime(), millis()%1000, TasmotaGlobal.power?"on":"off", light_state_dimmer);
 
   PS16DZSerialSend(tx_buffer);
 }
@@ -120,7 +120,7 @@ void PS16DZSerialInput(void)
 
 //            AddLog_P2(LOG_LEVEL_DEBUG, PSTR("PSZ: Switch %d"), switch_state);
 
-            is_switch_change = (switch_state != power);
+            is_switch_change = (switch_state != TasmotaGlobal.power);
             if (is_switch_change) {
               ExecuteCommandPower(1, switch_state, SRC_SWITCH);  // send SRC_SWITCH? to use as flag to prevent loop from inbound states from faceplate interaction
             }
@@ -131,7 +131,7 @@ void PS16DZSerialInput(void)
 //            AddLog_P2(LOG_LEVEL_DEBUG, PSTR("PSZ: Brightness %d"), Ps16dz.dimmer);
 
             is_brightness_change = Ps16dz.dimmer != Settings.light_dimmer;
-            if (power && (Ps16dz.dimmer > 0) && is_brightness_change) {
+            if (TasmotaGlobal.power && (Ps16dz.dimmer > 0) && is_brightness_change) {
               snprintf_P(scmnd, sizeof(scmnd), PSTR(D_CMND_DIMMER " %d"), Ps16dz.dimmer);
               ExecuteCommand(scmnd, SRC_SWITCH);
             }
@@ -154,7 +154,7 @@ void PS16DZSerialInput(void)
       else if (!strncmp(Ps16dz.rx_buffer+3, "SETTING", 7)) {
         // AT+SETTING=enterESPTOUCH - When ON button is held for over 5 seconds
         // AT+SETTING=exitESPTOUCH  - When ON button is pressed
-        if (!Settings.flag.button_restrict) {
+        if (!Settings.flag.button_restrict) {  // SetOption1 - Control button multipress
           int state = WIFI_MANAGER;
           if (!strncmp(Ps16dz.rx_buffer+10, "=exit", 5)) { state = WIFI_RETRY; }
           if (state != Settings.sta_config) {
@@ -187,7 +187,7 @@ void PS16DZInit(void)
 {
   Ps16dz.rx_buffer = (char*)(malloc(PS16DZ_BUFFER_SIZE));
   if (Ps16dz.rx_buffer != nullptr) {
-    PS16DZSerial = new TasmotaSerial(pin[GPIO_RXD], pin[GPIO_TXD], 2);
+    PS16DZSerial = new TasmotaSerial(Pin(GPIO_RXD), Pin(GPIO_TXD), 2);
     if (PS16DZSerial->begin(19200)) {
       if (PS16DZSerial->hardwareSerial()) { ClaimSerial(); }
     }
@@ -196,8 +196,8 @@ void PS16DZInit(void)
 
 bool PS16DZModuleSelected(void)
 {
-  devices_present++;
-  light_type = LT_SERIAL1;
+  TasmotaGlobal.devices_present++;
+  TasmotaGlobal.light_type = LT_SERIAL1;
 
   return true;
 }
@@ -210,7 +210,7 @@ bool Xdrv19(uint8_t function)
 {
   bool result = false;
 
-  if (PS_16_DZ == my_module_type) {
+  if (PS_16_DZ == TasmotaGlobal.module_type) {
     switch (function) {
       case FUNC_LOOP:
         if (PS16DZSerial) { PS16DZSerialInput(); }
