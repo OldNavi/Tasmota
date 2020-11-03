@@ -56,7 +56,7 @@
 
 #define XSNS_04             4
 
-uint16_t sc_value[5] = { 0 };
+float sc_value[6] = { 0 };
 
 void SonoffScSend(const char *data)
 {
@@ -76,22 +76,22 @@ void SonoffScSerialInput(char *rcvstat)
 {
   char *p;
   char *str;
-  uint16_t value[5] = { 0 };
+  float value[6] = { 0 };
 
   AddLog_P2(LOG_LEVEL_DEBUG, PSTR(D_LOG_SERIAL D_RECEIVED " %s"), rcvstat);
 
   if (!strncasecmp_P(rcvstat, PSTR("AT+UPDATE="), 10)) {
     int8_t i = -1;
-    for (str = strtok_r(rcvstat, ":", &p); str && i < 5; str = strtok_r(nullptr, ":", &p)) {
-      value[i++] = atoi(str);
+    for (str = strtok_r(rcvstat, ":", &p); str && i < 6; str = strtok_r(nullptr, ":", &p)) {
+      value[i++] = atof(str);
     }
     if (value[0] > 0) {
-      for (uint32_t i = 0; i < 5; i++) {
+      for (uint32_t i = 0; i < 6; i++) {
         sc_value[i] = value[i];
       }
-      sc_value[2] = (11 - sc_value[2]) * 10;  // Invert light level
-      sc_value[3] *= 10;
-      sc_value[4] = (11 - sc_value[4]) * 10;  // Invert dust level
+      sc_value[3] = (uint16_t)(((uint16_t)11 - (uint16_t)sc_value[3]) * 10);  // Invert light level
+      sc_value[4] *= 10;
+      sc_value[5] = (uint16_t)(((uint16_t)11 - (uint16_t)sc_value[5]) * 10);  // Invert dust level
       SonoffScSend("AT+SEND=ok");
     } else {
       SonoffScSend("AT+SEND=fail");
@@ -114,16 +114,19 @@ void SonoffScShow(bool json)
   if (sc_value[0] > 0) {
     float t = ConvertTemp(sc_value[1]);
     float h = ConvertHumidity(sc_value[0]);
-
+    float p = ConvertPressure(sc_value[2]);
+    char pressure[FLOATSZ];
+    dtostrfd(p, Settings.flag2.pressure_resolution, pressure);
     if (json) {
       ResponseAppend_P(PSTR(",\"SonoffSC\":{"));
       ResponseAppendTHD(t, h);
-      ResponseAppend_P(PSTR(",\"" D_JSON_LIGHT "\":%d,\"" D_JSON_NOISE "\":%d,\"" D_JSON_AIRQUALITY "\":%d}"), sc_value[2], sc_value[3], sc_value[4]);
-#ifdef USE_DOMOTICZ
+      ResponseAppend_P(PSTR(",\"" D_JSON_PRESSURE "\":%s"), pressure);
+      ResponseAppend_P(PSTR(",\"" D_JSON_LIGHT "\":%d,\"" D_JSON_NOISE "\":%d,\"" D_JSON_AIRQUALITY "\":%d}"), (uint16_t)sc_value[3], (uint16_t)sc_value[4], (uint16_t)sc_value[5]);
+      #ifdef USE_DOMOTICZ
       if (0 == tele_period) {
-        DomoticzTempHumPressureSensor(t, h);
-        DomoticzSensor(DZ_ILLUMINANCE, sc_value[2]);
-        DomoticzSensor(DZ_COUNT, sc_value[3]);
+        DomoticzTempHumPressureSensor(t, h, p);
+        DomoticzSensor(DZ_ILLUMINANCE, (uint16_t)sc_value[2]);
+        DomoticzSensor(DZ_COUNT, (uint16_t)sc_value[3]);
         DomoticzSensor(DZ_AIRQUALITY, 500 + ((100 - sc_value[4]) * 20));
       }
 #endif  // USE_DOMOTICZ
@@ -138,7 +141,8 @@ void SonoffScShow(bool json)
 #ifdef USE_WEBSERVER
     } else {
       WSContentSend_THD("", t, h);
-      WSContentSend_PD(HTTP_SNS_SCPLUS, sc_value[2], sc_value[3], sc_value[4]);
+      WSContentSend_PD(HTTP_SNS_PRESSURE, "", pressure, PressureUnit().c_str());
+      WSContentSend_PD(HTTP_SNS_SCPLUS, (uint16_t)sc_value[3], (uint16_t)sc_value[4], (uint16_t)sc_value[5]);
 #endif  // USE_WEBSERVER
     }
   }
